@@ -845,8 +845,8 @@ sub gwCall {
 	my $accounts = $prefs->get('accounts') || {};
 	$context->{arl} ||= $accounts->{$self->userId}->{arl} if $accounts->{$self->userId};
 	
-		# we need to acquire an SID
-	    return $self->_ajax( sub {
+	# we need to acquire an SID
+	return $self->_ajax( sub {
 		my $result = shift;
 		$context->{csrf} = $result->{results}->{checkForm};
 		$context->{sid} = $result->{results}->{SESSION_ID};
