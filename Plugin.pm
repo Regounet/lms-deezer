@@ -453,11 +453,13 @@ sub selectAccount {
 			url => sub {
 				my ($client, $cb2, $params, $args) = @_;
 				$prefs->client($client)->set('userId', $args->{id});
+				$client->pluginData( api => undef );
 
 				$cb2->({ items => [{
 					nextWindow => 'grandparent',
 				}] });
 			},
+
 			passthrough => [{
 				id => $_->{id}
 			}],
@@ -1083,19 +1085,21 @@ sub getAPIHandler {
 	my $api;
 
 	if (ref $client) {
+		my $userId = $prefs->client($client)->get('userId');
 		$api = $client->pluginData('api');
 
-		if ( !$api ) {
-			my $userdata = Plugins::Deezer::API->getUserdata($prefs->client($client)->get('userId'));
+		if ( !$api || ($userId && $api->userId ne $userId) ) {
+			my $userdata = Plugins::Deezer::API->getUserdata($userId);
 
 			# if there's no account assigned to the player, just pick one
 			if ( !$userdata ) {
-				my $userId = Plugins::Deezer::API->getSomeUserId();
+				$userId = Plugins::Deezer::API->getSomeUserId();
 				$prefs->client($client)->set('userId', $userId) if $userId;
 			}
 
 			$api = $client->pluginData( api => Plugins::Deezer::API::Async->new({
-				client => $client
+				client => $client,
+				userId => $userId,
 			}) );
 		}
 	}

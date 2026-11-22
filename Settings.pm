@@ -27,24 +27,32 @@ sub handler {
 
 	if ($params->{addAccount}) {
 		my $arl = $params->{arl};
+		my $subAccountId = $params->{subAccountId};
+		$subAccountId =~ s/\s+//g if $subAccountId;
 		main::INFOLOG && $log->is_info && $log->info("Adding/Refreshing account with arl $arl");
 		
 		Plugins::Deezer::API::Async::getUserFromARL( sub {	
-			my $user = shift;
-		
-			if ( my $userId = $user->{id} ) {
-				$user->{status} = 2;
-				$user->{arl} = $arl;
-			
-				main::INFOLOG && $log->is_info && $log->info("Added/refreshed user $user->{name} successfully");
+			my $users = shift;
+			$users = [ $users ] if ref $users eq 'HASH' && $users->{id};
 
-				my $accounts = $prefs->get('accounts');
-				my %account = (%{$accounts->{$userId} || {}}, 
-								%{$user}, 
-				);
-				$accounts->{$userId} = \%account;
+			if ( ref $users eq 'ARRAY' && @$users ) {
+				my $accounts = $prefs->get('accounts') || {};
+				my $delay = 0;
+
+				foreach my $user (@$users) {
+					next unless my $userId = $user->{id};
+					$user->{status} = 2;
+					$user->{arl} = $arl;
+				
+					main::INFOLOG && $log->is_info && $log->info("Added/refreshed user $user->{name} ($userId) successfully");
+
+					my %account = (%{$accounts->{$userId} || {}}, %{$user});
+					$accounts->{$userId} = \%account;
+
+					Slim::Utils::Timers::setTimer($userId, time() + $delay, \&Plugins::Deezer::API::Async::refreshArl, $userId);
+					$delay += 3;
+				}
 				$prefs->set('accounts', $accounts);
-				Plugins::Deezer::API::Async::refreshArl($userId);
 			} else {
 				$params->{'warning'} = Slim::Utils::Strings::string('PLUGIN_DEEZER_AUTH_FAILED');
 				$log->error("Unable to add /refresh user with ARL $arl");
@@ -52,7 +60,9 @@ sub handler {
 			
 			my $body = $class->SUPER::handler( $client, $params );
 			$callback->($client, $params, $body, @args);
-		},  $arl );
+		}, $arl, $subAccountId );
+		
+		return;
 		
 =comment		
 		Plugins::Deezer::API::Auth::authRegister($params->{seed}, sub {
